@@ -122,6 +122,7 @@ panic(char *s)
   printf(s);
   printf("\n");
   panicked = 1; // freeze uart output from other CPUs
+  backtrace();
   for(;;)
     ;
 }
@@ -131,4 +132,23 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+void backtrace()
+{
+  uint64 fm_pointer_ad = r_fp();
+  //uint64 *fm_pointer = (uint64*) fm_pointer_ad;
+  uint64 *retad = (uint64 *)(fm_pointer_ad - 8);
+  uint64 *prev_ad = (uint64 *)(fm_pointer_ad - 16);
+  uint64 upbound = PGROUNDUP(fm_pointer_ad);
+  uint64 downbound = PGROUNDDOWN(fm_pointer_ad);
+  printf("backtrace:\n");
+  while((fm_pointer_ad < upbound) && (fm_pointer_ad > downbound)){
+    printf("%p\n", *retad);
+    fm_pointer_ad = *prev_ad;
+    //fm_pointer = (uint64 *) fm_pointer_ad;
+    retad = (uint64 *)(fm_pointer_ad - 8);
+    prev_ad = (uint64 *)(fm_pointer_ad - 16);
+  }
+
 }
