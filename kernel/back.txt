@@ -1,0 +1,46 @@
+pte_t *pte;
+  if((pte = walk(pagetable, PGROUNDDOWN(dstva), 0)) == 0){
+    panic("copyout: pte should exist");
+  }
+  if((*pte & PTE_RR) != 0){
+    char *mem;
+    pte_t *pte;
+
+    uint64 i;
+    uint flags;
+    uint64 va1,pa1;
+    uint64 pa_len = len;
+    
+    while(pa_len > 0)
+    {
+      va1 = PGROUNDDOWN(dstva);
+      if ((pte = walk(pagetable, va1, 0)) == 0)
+        panic("copyout: pte should exist");
+      if ((*pte & PTE_V) == 0)
+        panic("copyput: page not present");
+      
+      pa1 = PTE2PA(*pte);
+      flags = PTE_FLAGS(*pte);
+      flags = flags & (~PTE_RR);
+      flags = flags | PTE_W;
+
+      i = PGSIZE - (dstva - va1);
+      if(i > pa_len)
+        i = len;
+
+      if ((mem = kalloc()) == 0)
+        return -1;
+      
+      memmove(mem, (char *)pa1, PGSIZE);
+
+      if (mappages(pagetable, va1, PGSIZE, (uint64)mem, flags) != 0)
+      {
+        kfree((void *)pa1);
+        return -1;
+      }
+      kdecrement((void *)pa1);
+
+      pa_len -= i;
+      dstva = va1 + PGSIZE;
+    }
+  }

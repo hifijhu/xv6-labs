@@ -148,8 +148,8 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
-    if(*pte & PTE_V)
-      panic("mappages: remap");
+    //if(*pte & PTE_V)
+    //  panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -303,22 +303,29 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  //char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+    *pte = *pte & (~PTE_W);
+    *pte = *pte | PTE_RR;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    /*
+      if((mem = kalloc()) == 0)
       goto err;
+    
     memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    */
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      kfree((void *)pa);
       goto err;
     }
+    kincrement((void *)pa);
+
   }
   return 0;
 
@@ -348,6 +355,60 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
+  pte_t *pte;
+  if(dstva >= MAXVA || PGROUNDDOWN(dstva) >= MAXVA){
+    
+    return -1;
+  }
+  
+  if((pte = walk(pagetable, PGROUNDDOWN(dstva), 0)) == 0){
+    return -1;
+  }
+  if((*pte & PTE_RR) != 0){
+    char *mem;
+    pte_t *pte;
+
+    uint64 i;
+    uint flags;
+    uint64 va1,pa1;
+    uint64 pa_len = len;
+    uint64 pa_dstva = dstva;
+    
+    while(pa_len > 0)
+    {
+      va1 = PGROUNDDOWN(pa_dstva);
+      if(va1 >=MAXVA || pa_dstva >= MAXVA)
+        return -1;
+      if ((pte = walk(pagetable, va1, 0)) == 0)
+        return -1;
+      if ((*pte & PTE_V) == 0)
+        return -1;
+      
+      pa1 = PTE2PA(*pte);
+      flags = PTE_FLAGS(*pte);
+      flags = flags & (~PTE_RR);
+      flags = flags | PTE_W;
+
+      i = PGSIZE - (pa_dstva - va1);
+      if(i > pa_len)
+        i = len;
+
+      if ((mem = kalloc()) == 0)
+        return -1;
+      
+      memmove(mem, (char *)pa1, PGSIZE);
+
+      if (mappages(pagetable, va1, PGSIZE, (uint64)mem, flags) != 0)
+      {
+        kfree((void *)mem);
+        return -1;
+      }
+      kfree((void *)pa1);
+
+      pa_len -= i;
+      pa_dstva = va1 + PGSIZE;
+    }
+  }
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
@@ -363,6 +424,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     dstva = va0 + PGSIZE;
   }
   return 0;
+    
 }
 
 // Copy from user to kernel.

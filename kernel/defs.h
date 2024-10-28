@@ -64,7 +64,7 @@ void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
 void            kincrement(void *);
-void            kdecrement(void *);
+
 
 // log.c
 void            initlog(int, struct superblock*);
