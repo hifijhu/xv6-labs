@@ -92,6 +92,10 @@
 /* Transmit Descriptor command definitions [E1000 3.3.3.1] */
 #define E1000_TXD_CMD_EOP    0x01 /* End of Packet */
 #define E1000_TXD_CMD_RS     0x08 /* Report Status */
+#define E1000_TXD_CMD_IFCS   0x02
+#define E1000_TXD_CMD_IC     0x04
+#define E1000_TXD_CMD_VLE    0x40
+#define E1000_TXD_CMD_IDE    0x80
 
 /* Transmit Descriptor status definitions [E1000 3.3.3.2] */
 #define E1000_TXD_STAT_DD    0x00000001 /* Descriptor Done */
