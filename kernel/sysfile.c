@@ -291,6 +291,7 @@ sys_open(void)
   struct file *f;
   struct inode *ip;
   int n;
+  char target[MAXPATH];
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -316,12 +317,40 @@ sys_open(void)
     }
   }
 
+  if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0){
+      
+    strncpy(target, ip->linkpath, MAXPATH);
+    int epoch = 10;
+    for(epoch = 10; epoch > 0; epoch--){
+      iunlockput(ip);
+      if((ip = namei(target)) == 0){
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      if(ip->type != T_SYMLINK)
+        break;
+      if(ip->type == T_SYMLINK)
+        strncpy(target, ip->linkpath, MAXPATH);
+    }
+    if(epoch == 0){
+      //printf("4\n");
+      iunlockput(ip);
+      //printf("2\n");
+      end_op();
+      return -1;
+    }
+
+  }
+  
+
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
     return -1;
   }
 
+  
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -482,5 +511,26 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64 
+sys_symlink(void){
+  char target[MAXPATH];
+  char path[MAXPATH];
+  struct inode *ip;
+  begin_op();
+  if(argstr(0, target, MAXPATH) < 0|| argstr(1, path, MAXPATH) < 0||
+    (ip = create(path, T_SYMLINK, 0, 0)) == 0){
+      end_op();
+      return -1;
+    }
+  for(int i=0; i<MAXPATH; i++){
+    ip->linkpath[i] = target[i];
+    iupdate(ip);
+  }
+  
+  iunlockput(ip);
+  end_op();
   return 0;
 }
